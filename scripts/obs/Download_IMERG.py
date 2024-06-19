@@ -24,8 +24,10 @@ def IMERG_download(year,month,day,hour,minute):
 
     os.chdir('/Users/acheung/data/IMERG/'+str(year)+'/'+day_of_year)
     url_desired = "https://gpm1.gesdisc.eosdis.nasa.gov/data/GPM_L3/GPM_3IMERGHH.07/"+str(year)+'/'+day_of_year+'/'+'3B-HHR.MS.MRG.3IMERG.'+day_stripped+'-S'+time_stripped+'-E'+end_time_stripped+'.'+min_of_day+'.V07B.HDF5'
-    os.system('wget --load-cookies ~/.urs_cookies --save-cookies ~/.urs_cookies --keep-session-cookies '+ url_desired)
     
     IMERG_file_path = '/Users/acheung/data/IMERG/'+str(year)+'/'+day_of_year+'/'+'3B-HHR.MS.MRG.3IMERG.'+day_stripped+'-S'+time_stripped+'-E'+end_time_stripped+'.'+min_of_day+'.V07B.HDF5'
+    
+    if os.path.exists(IMERG_file_path) == False: # Won't download files that already exist!
+        os.system('wget --load-cookies ~/.urs_cookies --save-cookies ~/.urs_cookies --keep-session-cookies '+ url_desired)
     
     return IMERG_file_path
