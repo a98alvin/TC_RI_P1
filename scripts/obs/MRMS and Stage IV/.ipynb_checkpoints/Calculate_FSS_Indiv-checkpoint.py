@@ -56,8 +56,10 @@ def fraction_calculator(lat_lon_now,masked_imerg,masked_mrms,imerg_ind_0,imerg_i
     warnings.filterwarnings("ignore", category=RuntimeWarning)
     
     # If the thresholds calculate from the same dataset (e.g., IMERG), it means that we are including bias
-    imerg_threshold = np.nanpercentile(masked_imerg,thresholds[0])
-    mrms_threshold = np.nanpercentile(masked_imerg,thresholds[-1])
+    # imerg_threshold = np.nanpercentile(masked_imerg,thresholds[0])
+    # mrms_threshold = np.nanpercentile(masked_imerg,thresholds[-1])
+    imerg_threshold = thresholds[0]
+    mrms_threshold = thresholds[0]
 
     distance_arr_imerg = distance_calculator(lat_lon_now[1],lat_lon_now[0],
                                        (lat_lon_now[1][imerg_ind_0,imerg_ind_1],
@@ -71,6 +73,8 @@ def fraction_calculator(lat_lon_now,masked_imerg,masked_mrms,imerg_ind_0,imerg_i
     distance_arr_mrms = distance_calculator(lat_lon_now[1],lat_lon_now[0],
                                        (lat_lon_now[1][imerg_ind_0,imerg_ind_1],
                                         lat_lon_now[0][imerg_ind_0,imerg_ind_1]))
+    
+
     
     masked_mrms_xr = xr.DataArray(masked_mrms)
     inside_rad_mrms = (masked_mrms_xr.where(distance_arr_mrms < radius_to_include)).values.ravel()
@@ -94,36 +98,49 @@ def parallel(fraction_now_ind,indiv_image_loop,M, N,radius_to_include,thresholds
     lat_lon_now = lat_lon_arr_list[fraction_now_ind]
     masked_imerg = imerg_precip_list[fraction_now_ind][indiv_image_loop]              
     masked_mrms = interpolated_mrms_list[fraction_now_ind][indiv_image_loop]
+    current_image_percentile = (masked_imerg < thresholds[0]).sum()/(~np.isnan(masked_imerg)).sum()
 
     result = pool.map(splat_f, ((lat_lon_now,masked_imerg,masked_mrms,
                                   imerg_ind_0,imerg_ind_1,radius_to_include,thresholds) for imerg_ind_0 in range(M) for imerg_ind_1 in range(N)))
 
-    return np.array(np.asarray(result)[:,0]).reshape(M, N),np.array(np.asarray(result)[:,1]).reshape(M, N)
+    return np.array(np.asarray(result)[:,0]).reshape(M, N),np.array(np.asarray(result)[:,1]).reshape(M, N),current_image_percentile
 
 test_radii = np.concatenate([np.arange(10,60,5),np.arange(60,800.1,50)])
-thresholds_wanted = [75,90,95,99]
+# thresholds_wanted = [75,90,95,99]
+thresholds_wanted = np.array([0.05,0.1,0.15,0.2])*25.4 # Convert inch thresholds to mm
 
 # Calculate fractions in parallel
 
 FSS_lists_with_all_thresholds = [] # appends once per threshold
+percentile_lists_with_all_thresholds = []
 for thresholds_interested in thresholds_wanted:
     thresholds = [thresholds_interested]
     FSS_overall_list = [] # appends once per storm
+    percentile_overall_list = []
     for fraction_now_ind in range(len(imerg_precip_list)): # This loops over all storms
         FSS_per_image_list = [] # appends once per image
+        percentile_per_image_list = []
         for indiv_image_loop in range(len(imerg_precip_list[fraction_now_ind])): # This loops over all images in a storm
             FSS_list = [] # appends once per radius check
+            percentile_list = []
             for radius_loop in test_radii:
-                imerg_fractions,mrms_fractions = parallel(fraction_now_ind,indiv_image_loop,M,N,radius_loop,thresholds)
+                imerg_fractions,mrms_fractions,current_image_percentile = parallel(fraction_now_ind,indiv_image_loop,M,N,radius_loop,thresholds)
                 FBS = (np.nansum((mrms_fractions - imerg_fractions)**2))/len(imerg_fractions.ravel())
                 FBS_worst = (np.nansum(mrms_fractions**2) + np.nansum(imerg_fractions**2))/len(imerg_fractions.ravel())
                 FSS = 1 - (FBS/FBS_worst)
                 FSS_list.append(FSS) # This saves all FSS value to one list, regardless of ROI
+                percentile_list.append(current_image_percentile)
             FSS_per_image_list.append(FSS_list)
-            print(((thresholds_interested),(fraction_now_ind,len(imerg_precip_list)),(indiv_image_loop,len(imerg_precip_list[fraction_now_ind]))))
+            percentile_per_image_list.append(percentile_list[0]) # Only need one of these values
+            print(((np.round(thresholds_interested/25.4,2)),(fraction_now_ind,len(imerg_precip_list)),(indiv_image_loop,len(imerg_precip_list[fraction_now_ind]))))
         FSS_overall_list.append(FSS_per_image_list)
+        percentile_overall_list.append(percentile_per_image_list)
         print(str(fraction_now_ind + 1) + ' of ' + str(len(imerg_precip_list)) + '; Current Threshold: ' + str(thresholds_interested))
     FSS_lists_with_all_thresholds.append(FSS_overall_list)
+    percentile_lists_with_all_thresholds.append(percentile_overall_list)
 
 with open('/Users/acheung/data/intermediates/FSS_list_indiv.pkl', 'wb') as f:
     pickle.dump(FSS_lists_with_all_thresholds, f)
+    
+with open('/Users/acheung/data/intermediates/percentile_list_indiv.pkl', 'wb') as f:
+    pickle.dump(percentile_lists_with_all_thresholds, f) # To get F0 for each image: 1-percentile
