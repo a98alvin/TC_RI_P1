@@ -72,8 +72,8 @@ def x_y_grid_to_cylindrical(center_inds,radius_min,radius_max,radius_interval, N
         # Overwrite the zeros array with all the circles drawn
         xcirc_all[jc_ind,:]=xcirc # put x- and y- coordinates of all circles in one variable
         ycirc_all[jc_ind,:]=ycirc
-
-    interp = RegularGridInterpolator((x_grid, y_grid), data)
+    
+    interp = RegularGridInterpolator((y_grid, x_grid), data,bounds_error=False,fill_value=np.nan)
     cylindrical_data = interp((xcirc_all,ycirc_all))
     
     # Return the cylindrical data, array of azimuths (MATH ANGLES, NOT METEO ANGLE), and radius array
@@ -111,8 +111,8 @@ def interp_to_equal_grid(original_lon_arr,original_lat_arr,data,dx,dy): # input 
 
     dtheta = dy/Re
     dtheta_deg = dtheta * 180/np.pi # change in lat degrees per dy desired
-    lat_dx_accom = np.arange(pd.DataFrame(original_lat_arr)[0].values[0],pd.DataFrame(original_lat_arr)[0].values[-1],dtheta_deg)
 
+    lat_dx_accom = np.arange(pd.DataFrame(original_lat_arr)[0].values[0],pd.DataFrame(original_lat_arr)[0].values[-1],dtheta_deg)
     x_pd = pd.DataFrame(original_lon_arr)
     x_pd.index = pd.DataFrame(original_lat_arr)[0].values
 
@@ -128,6 +128,7 @@ def interp_to_equal_grid(original_lon_arr,original_lat_arr,data,dx,dy): # input 
         curr_lon_arr = np.arange(x_pd.iloc[0].values[0]+0.01,x_pd.iloc[0].values[-1],delta_lambda)
         lon_list.append(curr_lon_arr)
         lat_list.append(lat_dx_accom)
+        
 
     interp = RegularGridInterpolator((original_lat_arr[:,0],original_lon_arr[0,:]), data)
 
@@ -138,6 +139,5 @@ def interp_to_equal_grid(original_lon_arr,original_lat_arr,data,dx,dy): # input 
         lon_pd = lon_pd[lat_pd.columns]
     elif lon_pd.columns.max() < lat_pd.columns.max():
         lat_pd = lat_pd[lon_pd.columns]
-  
     eq_dist_data = interp((lat_pd, lon_pd))
     return lon_pd,lat_pd,eq_dist_data
